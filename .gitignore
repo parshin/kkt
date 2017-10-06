@@ -1,5 +1,4 @@
-conf.py
-
+*.pyc
 /dto9base.py
 /libudev.so.0
 /libpaycard.so
@@ -21,3 +20,4 @@ conf.py
 /dto9fptr.py
 /libQtCore.so.4
 /fptr_t
+

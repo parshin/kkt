@@ -1,7 +1,7 @@
 import sys
 from conf import *
 
-sys.path.append('/var/www/kkt')
+sys.path.append('/var/www/kkt_shared')
 sys.path.append('/var/www/wsgi-scripts')
 sys.path.append('/var/www')
 

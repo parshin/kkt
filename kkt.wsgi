@@ -5,6 +5,7 @@ import sys
 import os
 import json
 import logging
+
 from conf import *
 from dto9fptr import Fptr
 
@@ -18,34 +19,12 @@ os.environ['LD_LIBRARY_PATH'] = os.path.dirname(os.path.realpath(__file__))
 logging.info(os.path.dirname(os.path.realpath(__file__)))
 logging.info(os.environ)
 
-driver = Fptr("/var/www/kkt/libfptr.so", 13)
-
-# urls = (
-#     '/(.*)', 'index'
-# )
-# class index():
-#     def POST(self, _):
-#         post_data = web.data()
-#         logging.info("received data: " + post_data)
-#
-#         try:
-#             check_data = json.loads(web.data())
-#         except ValueError, e:
-#             return "ERROR"
-#
-#         result = print_check(check_data)
-#
-#         return result
-#
-#     def GET(self, name):
-#         if not name:
-#             name = 'unnamed'
-#         return 'Hello, ' + name + '!'
-
 
 def application(environ, start_response):
     status = '200 OK'
     # output = 'OK'
+
+    driver = Fptr("/var/www/kkt/libfptr.so", 13)
 
     if environ['REQUEST_METHOD'] == 'POST':
         post_data = (environ['wsgi.input'].read())
@@ -61,13 +40,11 @@ def application(environ, start_response):
             return [output]
         else:
             logging.info("printing check...")
-            output = print_check(check_data).encode('UTF-8')
-            # output = json.dumps({'result_code': 0,
-            #                      "result_description": 'test',
-            #                      "check_number": 1})
+            output = print_check(driver, check_data).encode('UTF-8')
     else:
-        output = b'ERROR: incorrect method: ' + environ['REQUEST_METHOD'] + '\n' + b'Expected POST'
-        status = '405 Method Not Allowed'
+        output = get_kkt_status(driver)
+
+    del driver
 
     logging.info('sending response: ' + output)
     response_headers = [('Content-type', 'text/plain'),
@@ -76,8 +53,32 @@ def application(environ, start_response):
     return [output]
 
 
-def print_check(check_data):
+def get_kkt_status(driver):
     # 1. Установка параметров
+    driver.put_DeviceSingleSetting("Port", params["Port"])
+    driver.put_DeviceSingleSetting("IPAddress", params["IPAddress"])
+    driver.put_DeviceSingleSetting("IPPort", params["IPPort"])
+    driver.put_DeviceSingleSetting("Model", params["Model"])
+    driver.put_DeviceSingleSetting("Protocol", params["Protocol"])
+    driver.put_DeviceSingleSetting("AccessPassword", params["AccessPassword"])
+    driver.put_DeviceSingleSetting("UserPassword", params["UserPassword"])
+    driver.put_DeviceSingleSetting("Protocol", params["Protocol"])
+    driver.ApplySingleSettings()
+
+    driver.put_DeviceEnabled(True)
+
+    result = driver.GetStatus()
+    output = bytes("Статус ККТ:" + '\n' + repr(result).decode("unicode_escape"))
+
+    driver.put_DeviceEnabled(False)
+
+    driver.Beep()
+
+    return output
+
+
+def print_check(driver, check_data):
+    # Установка параметров
     driver.put_DeviceSingleSetting("Port", params["Port"])
     driver.put_DeviceSingleSetting("IPAddress", params["IPAddress"])
     driver.put_DeviceSingleSetting("IPPort", params["IPPort"])
@@ -191,7 +192,6 @@ def print_check(check_data):
             return json.dumps({'result_code': result_code,
                                "result_description": result_description})
 
-
     elif result_code != 0:
         logging.error("  result code:" + repr(result_code).decode("unicode_escape"))
         logging.error("  result description:" + repr(result_description).decode("unicode_escape"))
@@ -220,7 +220,7 @@ def print_check(check_data):
         return json.dumps({'result_code': result_code,
                            "result_description": result_description})
 
-    # 3. Регистрация позиций.
+    # Регистрация позиций.
     logging.info("registering positions...")
     for position in check_data['Goods']:
         logging.info("position: " + position)
@@ -249,12 +249,7 @@ def print_check(check_data):
         result = driver.Registration()  # Регистрация позиции
         logging.info("position registration:" + repr(result).decode("unicode_escape"))
 
-        # 4. Начисление скидки на первую позицию.
-        # 5. Регистрация второй позиции.
-
-    # # 6. Начисление надбавки на весь чек
-
-    # # 7. Прием оплаты.
+    # Прием оплаты.
     result = driver.put_TypeClose(1)  # Тип оплаты - Платежная карта
     logging.info("put type close:" + repr(result).decode("unicode_escape"))
     result_code = driver.get_ResultCode()
@@ -297,7 +292,7 @@ def print_check(check_data):
         return json.dumps({'result_code': result_code,
                            "result_description": result_description})
 
-    # 8. Закрытие чека.
+    # Закрытие чека.
     result = driver.CloseCheck()
     logging.info("close check:" + repr(result).decode("unicode_escape"))
     result_code = driver.get_ResultCode()
@@ -318,7 +313,6 @@ def print_check(check_data):
         return json.dumps({'result_code': result_code,
                            "result_description": result_description})
 
-
     driver.Beep()
 
     return json.dumps({'result_code': result_code,
@@ -326,5 +320,3 @@ def print_check(check_data):
                        "check_number": result})
 
 # if __name__ == "__main__":
-#     app = web.application(urls, globals())
-#     app.run()
